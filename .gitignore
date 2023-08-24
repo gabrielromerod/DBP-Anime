@@ -1,0 +1,11 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Optional: Ignore the data file if you don't want to push data to the repository
+#data.json
+
+# Add any other file or directory you might want to ignore in future
+.env
