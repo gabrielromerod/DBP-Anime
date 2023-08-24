@@ -1,131 +1,278 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_restful import Api, Resource, reqparse
-import json
+from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
+
+# JWT config
+app.config['JWT_SECRET_KEY'] = 'sfwjnONFQION3128Y3T471'
+
+# SQLAlchemy config
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://gabo:papa1234@localhost:5432/anime'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # to silence a warning
+
+db = SQLAlchemy(app)
+jwt = JWTManager(app)
 api = Api(app)
 
-try:
-    with open('data.json', 'r') as f:
-        data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    data = {"animeList": []}
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import Column, Integer, String, Float, Table, ForeignKey
+from sqlalchemy.orm import relationship
 
-class Anime(Resource):
-    def get(self, id=None):
-        if id is None:
-            return data, 200
-        for anime in data["animeList"]:
-            if(id == anime["id"]):
-                return anime, 200
-        return "Anime not found", 404
+class UserModel(db.Model):    
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    username = Column(String(80), unique=True, nullable=False)  # Ensuring usernames are unique
+    password_hash = Column(String(128), nullable=False)
+
+    def __init__(self, username, password):
+        self.username = username
+        self.password_hash = generate_password_hash(password)
+
+    def register(self):
+        # you might need to adjust this later for db.session
+        db.session.add(self)
+        db.session.commit()
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def json(self):
+        return {'id': self.id, 'username': self.username, 'password': self.password}
+    
+    @classmethod
+    def find_by_username(cls, username):
+        return cls.query.filter_by(username=username).first()
+    
+    @classmethod
+    def find_by_id(cls, _id):
+        return cls.query.filter_by(id=_id).first()
+    
+    def save_to_db(self):
+        # you might need to adjust this later for db.session
+        db.session.add(self)
+        db.session.commit()
+
+class CategoryModel(db.Model):
+    __tablename__ = 'categories'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(80), nullable=False, unique=True)
+
+    animes = relationship('AnimeModel', secondary='anime_categories', back_populates='categories')
+
+anime_categories = Table('anime_categories', db.metadata,
+    Column('category_id', Integer, ForeignKey('categories.id')),
+    Column('anime_id', Integer, ForeignKey('anime.id'))
+)
+
+class AnimeModel(db.Model):
+    __tablename__ = 'anime'
+
+    id = Column(Integer, primary_key=True)
+    title = Column(String(120), nullable=False, unique=True)
+    rating = Column(Float, nullable=False)
+    reviews = Column(Integer)
+    seasons = Column(Integer, nullable=False)
+    type = Column(String(80), nullable=False)
+    poster = Column(String(255))
+
+    # Many-to-Many relationship with Category
+    categories = relationship('CategoryModel', secondary=anime_categories, back_populates='animes')
+
+    def __init__(self, title, rating, reviews, seasons, type, poster):
+        self.title = title
+        self.rating = rating
+        self.reviews = reviews
+        self.seasons = seasons
+        self.type = type
+        self.poster = poster
+
+    def json(self):
+        return {
+            'id': self.id, 
+            'title': self.title, 
+            'rating': self.rating, 
+            'reviews': self.reviews, 
+            'seasons': self.seasons, 
+            'type': self.type, 
+            'poster': self.poster
+        }
+    
+    @classmethod
+    def find_by_title(cls, title):
+        return cls.query.filter_by(title=title).first()
+    
+    @classmethod
+    def find_by_id(cls, _id):
+        return cls.query.filter_by(id=_id).first()
+    
+    def save_to_db(self):
+        # you might need to adjust this later for db.session
+        db.session.add(self)
+        db.session.commit()
+
+class Login(Resource):
+    parser = reqparse.RequestParser()
+    parser.add_argument('username', type=str, required=True, help='This field cannot be blank.')
+    parser.add_argument('password', type=str, required=True, help='This field cannot be blank.')
 
     def post(self):
-        parser = reqparse.RequestParser()
-        parser.add_argument("id", type=int, required=True)
-        parser.add_argument("tittle", required=True)  # es una buena práctica agregar required=True para campos esenciales
-        parser.add_argument("categories", required=True, action='append')
-        parser.add_argument("rating", type=float, required=True)
-        parser.add_argument("reviews", type=int, required=True)
-        parser.add_argument("seasons", type=int, required=True)
-        parser.add_argument("type", required=True)
-        parser.add_argument("poster", required=True)
+        data = Login.parser.parse_args()
 
-        args = parser.parse_args()
+        user = UserModel.find_by_username(data['username'])
 
-        for anime in data["animeList"]:
-            if args["tittle"] == anime["tittle"]:
-                return "Anime with tittle already exists", 400
+        if user and user.check_password(data['password']):
+            access_token = create_access_token(identity=user.id, fresh=True)
+            return {'access_token': access_token}, 200
+        return {'message': 'Invalid credentials'}, 401
+    
+class Register(Resource):
+    parser = reqparse.RequestParser()
+    parser.add_argument('username', type=str, required=True, help='This field cannot be blank.')
+    parser.add_argument('password', type=str, required=True, help='This field cannot be blank.')
 
+    def post(self):
+        data = Register.parser.parse_args()
 
-        anime = {
-            "id": args["id"],
-            "tittle": args["tittle"],
-            "categories": args["categories"],
-            "rating": args["rating"],
-            "reviews": args["reviews"],
-            "seasons": args["seasons"],
-            "type": args["type"],
-            "poster": args["poster"]
-        }
+        if UserModel.find_by_username(data['username']):
+            return {'message': 'A user with that username already exists'}, 400
 
-        data["animeList"].append(anime)
-        try:
-            with open('data.json', 'w') as f:
-                json.dump(data, f)
-        except IOError:
-            return "Error writing to data file", 500
-        
-        return anime, 200
+        user = UserModel(data['username'], data['password'])
+        user.save_to_db()
 
+        return {'message': 'User created successfully.'}, 201
+    
+    def get(self):
+        return {"For register a user POST to /register with username and password": "POST /register"}, 200
 
-    def put(self, id):
-        parser = reqparse.RequestParser()
-        parser.add_argument("id", type=int, required=True)
-        parser.add_argument("tittle", required=True)
-        parser.add_argument("categories", required=True, action='append')
-        parser.add_argument("rating", type=float, required=True)  # Ensure type is float
-        parser.add_argument("reviews", type=int, required=True)   # Ensure type is int
-        parser.add_argument("seasons", type=int, required=True)   # Ensure type is int
-        parser.add_argument("type", required=True)
-        parser.add_argument("poster", required=True)
-        args = parser.parse_args()
+class User(Resource):
+    @jwt_required
+    def get(self):
+        user_id = get_jwt_identity()
+        user = UserModel.find_by_id(user_id)
+        return user.json(), 200
+    
+class Category(Resource):
+    parser = reqparse.RequestParser()
+    parser.add_argument('name', type=str, required=True, help='This field cannot be blank.')
 
-        for anime in data["animeList"]:
-            if(id == anime["id"]):
-                anime["id"] = args["id"]
-                anime["tittle"] = args["tittle"]
-                anime["categories"] = args["categories"]
-                anime["rating"] = args["rating"]
-                anime["reviews"] = args["reviews"]
-                anime["seasons"] = args["seasons"]
-                anime["type"] = args["type"]
-                anime["poster"] = args["poster"]
+    @jwt_required
+    def get(self, category_id):
+        category = CategoryModel.find_by_id(category_id)
+        if category:
+            return category.json(), 200
+        return {'message': 'Category not found'}, 404
 
-                try:
-                    with open('data.json', 'w') as f:
-                        json.dump(data, f)
-                except IOError:
-                    return "Error writing to data file", 500
-                return anime, 201
-            else:
-                return "Anime not found", 404
+    @jwt_required
+    def post(self, category_id):
+        data = Category.parser.parse_args()
 
-    def delete(self, id):
-        data["animeList"] = [anime for anime in data["animeList"] if anime["id"] != id]
-        try:
-            with open('data.json', 'w') as f:
-                json.dump(data, f)
-        except IOError:
-            return "Error writing to data file", 500
-        return "{} is deleted.".format(id), 200
+        if CategoryModel.find_by_name(data['name']):
+            return {'message': 'A category with that name already exists'}, 400
 
-    def patch(self, id):
-        parser = reqparse.RequestParser()
-        parser.add_argument("categories", action='append')
-        fields = ["tittle", "rating", "reviews", "seasons", "type", "poster"]
-        for field in fields:
-            parser.add_argument(field)
+        category = CategoryModel(data['name'])
+        category.save_to_db()
 
-        args = parser.parse_args()
+        return category.json(), 201
 
-        for anime in data["animeList"]:
-            if(id == anime["id"]):
-                for field in fields:
-                    if args[field] is not None:
-                        anime[field] = args[field]
-                if args["categories"] is not None:
-                    anime["categories"] = args["categories"]
-                try:
-                    with open('data.json', 'w') as f:
-                        json.dump(data, f)
-                except IOError:
-                    return "Error writing to data file", 500
-                return anime, 200
-            else:
-                return "Anime not found", 404
+    @jwt_required
+    def delete(self, category_id):
+        category = CategoryModel.find_by_id(category_id)
+        if category:
+            category.delete_from_db()
+            return {'message': 'Category deleted'}, 200
+        return {'message': 'Category not found'}, 404
+    
+class CategoryList(Resource):
+    @jwt_required
+    def get(self):
+        return {'categories': [category.json() for category in CategoryModel.query.all()]}, 200
+    
+class Anime(Resource):
+    @jwt_required
+    def get(self, anime_id):
+        anime = AnimeModel.find_by_id(anime_id)
+        if anime:
+            return anime.json(), 200
+        return {'message': 'Anime not found'}, 404
+    
+    @jwt_required
+    def post(self, anime_id):
+        data = Anime.parser.parse_args()
 
-api.add_resource(Anime, "/anime", "/anime/", "/anime/<int:id>")
+        if AnimeModel.find_by_title(data['title']):
+            return {'message': 'An anime with that title already exists'}, 400
 
-if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+        anime = AnimeModel(data['title'], data['rating'], data['reviews'], data['seasons'], data['type'], data['poster'])
+        anime.save_to_db()
+
+        return anime.json(), 201
+    
+    @jwt_required
+    def delete(self, anime_id):
+        anime = AnimeModel.find_by_id(anime_id)
+        if anime:
+            anime.delete_from_db()
+            return {'message': 'Anime deleted'}, 200
+        return {'message': 'Anime not found'}, 404
+    
+    @jwt_required
+    def put(self, anime_id):
+        data = Anime.parser.parse_args()
+
+        anime = AnimeModel.find_by_id(anime_id)
+
+        if anime:
+            anime.title = data['title']
+            anime.rating = data['rating']
+            anime.reviews = data['reviews']
+            anime.seasons = data['seasons']
+            anime.type = data['type']
+            anime.poster = data['poster']
+        else:
+            anime = AnimeModel(data['title'], data['rating'], data['reviews'], data['seasons'], data['type'], data['poster'])
+
+        anime.save_to_db()
+
+        return anime.json(), 200
+    
+    @jwt_required
+    def patch(self, anime_id):
+        data = Anime.parser.parse_args()
+
+        anime = AnimeModel.find_by_id(anime_id)
+
+        if anime:
+            anime.title = data['title'] if data['title'] else anime.title
+            anime.rating = data['rating'] if data['rating'] else anime.rating
+            anime.reviews = data['reviews'] if data['reviews'] else anime.reviews
+            anime.seasons = data['seasons'] if data['seasons'] else anime.seasons
+            anime.type = data['type'] if data['type'] else anime.type
+            anime.poster = data['poster'] if data['poster'] else anime.poster
+        else:
+            anime = AnimeModel(data['title'], data['rating'], data['reviews'], data['seasons'], data['type'], data['poster'])
+
+        anime.save_to_db()
+
+        return anime.json(), 200
+    
+class AnimeList(Resource):
+    @jwt_required
+    def get(self):
+        return {'animes': [anime.json() for anime in AnimeModel.query.all()]}, 200
+    
+
+api.add_resource(Login, '/login')
+api.add_resource(Register, '/register')
+api.add_resource(User, '/user')
+api.add_resource(Category, '/category/<int:category_id>')
+api.add_resource(CategoryList, '/categories')
+api.add_resource(Anime, '/anime/<int:anime_id>')
+api.add_resource(AnimeList, '/animes')
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(port=5000, debug=True)
