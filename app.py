@@ -2,6 +2,9 @@ from flask import Flask, jsonify
 from flask_restful import Api, Resource, reqparse
 from flask_jwt_extended import JWTManager, jwt_required, create_access_token, get_jwt_identity
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import Column, Integer, String, Float, Table, ForeignKey
+from sqlalchemy.orm import relationship
 
 app = Flask(__name__)
 
@@ -15,10 +18,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # to silence a warning
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 api = Api(app)
-
-from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import Column, Integer, String, Float, Table, ForeignKey
-from sqlalchemy.orm import relationship
 
 class UserModel(db.Model):    
     __tablename__ = 'users'

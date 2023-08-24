@@ -44,7 +44,7 @@ Esta es una API que utiliza Flask, Flask-RESTful, Flask-JWT-Extended y SQLAlchem
 3. **Ejecución**:
    - Si todo está configurado correctamente, simplemente ejecuta el script en tu terminal para iniciar el servidor:
    ```bash
-   python your_script_name.py
+   python app.py
    ```
 
    Esto iniciará un servidor Flask en el puerto 5000. Puedes acceder a la API en `http://localhost:5000`.
