@@ -62,6 +62,10 @@ class CategoryModel(db.Model):
 
     animes = relationship('AnimeModel', secondary='anime_categories', back_populates='categories')
 
+    def delete_from_db(self):
+        db.session.delete(self)
+        db.session.commit()
+
 anime_categories = Table('anime_categories', db.metadata,
     Column('category_id', Integer, ForeignKey('categories.id')),
     Column('anime_id', Integer, ForeignKey('anime.id'))
@@ -109,8 +113,11 @@ class AnimeModel(db.Model):
         return cls.query.filter_by(id=_id).first()
     
     def save_to_db(self):
-        # you might need to adjust this later for db.session
         db.session.add(self)
+        db.session.commit()
+
+    def delete_from_db(self):
+        db.session.delete(self)
         db.session.commit()
 
 class Login(Resource):
@@ -158,14 +165,14 @@ class Category(Resource):
     parser = reqparse.RequestParser()
     parser.add_argument('name', type=str, required=True, help='This field cannot be blank.')
 
-    @jwt_required
+    @jwt_required()
     def get(self, category_id):
         category = CategoryModel.find_by_id(category_id)
         if category:
             return category.json(), 200
         return {'message': 'Category not found'}, 404
 
-    @jwt_required
+    @jwt_required()
     def post(self, category_id):
         data = Category.parser.parse_args()
 
@@ -177,7 +184,7 @@ class Category(Resource):
 
         return category.json(), 201
 
-    @jwt_required
+    @jwt_required()
     def delete(self, category_id):
         category = CategoryModel.find_by_id(category_id)
         if category:
@@ -186,21 +193,37 @@ class Category(Resource):
         return {'message': 'Category not found'}, 404
     
 class CategoryList(Resource):
-    @jwt_required
+    @jwt_required()
     def get(self):
         return {'categories': [category.json() for category in CategoryModel.query.all()]}, 200
     
 class Anime(Resource):
-    @jwt_required
+    post_parser = reqparse.RequestParser()
+    post_parser.add_argument('title', type=str, required=True, help='This field cannot be blank.')
+    post_parser.add_argument('rating', type=float, required=True, help='This field cannot be blank.')
+    post_parser.add_argument('reviews', type=int, required=True, help='This field cannot be blank.')
+    post_parser.add_argument('seasons', type=int, required=True, help='This field cannot be blank.')
+    post_parser.add_argument('type', type=str, required=True, help='This field cannot be blank.')
+    post_parser.add_argument('poster', type=str, required=True, help='This field cannot be blank.')
+
+    patch_parser = reqparse.RequestParser()
+    patch_parser.add_argument('title', type=str, required=False)
+    patch_parser.add_argument('rating', type=float, required=False)
+    patch_parser.add_argument('reviews', type=int, required=False)
+    patch_parser.add_argument('seasons', type=int, required=False)
+    patch_parser.add_argument('type', type=str, required=False)
+    patch_parser.add_argument('poster', type=str, required=False)
+    
+    @jwt_required()
     def get(self, anime_id):
         anime = AnimeModel.find_by_id(anime_id)
         if anime:
             return anime.json(), 200
         return {'message': 'Anime not found'}, 404
     
-    @jwt_required
-    def post(self, anime_id):
-        data = Anime.parser.parse_args()
+    @jwt_required()
+    def post(self):
+        data = Anime.post_parser.parse_args()
 
         if AnimeModel.find_by_title(data['title']):
             return {'message': 'An anime with that title already exists'}, 400
@@ -210,7 +233,7 @@ class Anime(Resource):
 
         return anime.json(), 201
     
-    @jwt_required
+    @jwt_required()
     def delete(self, anime_id):
         anime = AnimeModel.find_by_id(anime_id)
         if anime:
@@ -218,9 +241,9 @@ class Anime(Resource):
             return {'message': 'Anime deleted'}, 200
         return {'message': 'Anime not found'}, 404
     
-    @jwt_required
+    @jwt_required()
     def put(self, anime_id):
-        data = Anime.parser.parse_args()
+        data = Anime.post_parser.parse_args()
 
         anime = AnimeModel.find_by_id(anime_id)
 
@@ -238,9 +261,9 @@ class Anime(Resource):
 
         return anime.json(), 200
     
-    @jwt_required
+    @jwt_required()
     def patch(self, anime_id):
-        data = Anime.parser.parse_args()
+        data = Anime.patch_parser.parse_args()
 
         anime = AnimeModel.find_by_id(anime_id)
 
@@ -259,7 +282,7 @@ class Anime(Resource):
         return anime.json(), 200
     
 class AnimeList(Resource):
-    @jwt_required
+    @jwt_required()
     def get(self):
         return {'animes': [anime.json() for anime in AnimeModel.query.all()]}, 200
     
@@ -269,7 +292,7 @@ api.add_resource(Register, '/register')
 api.add_resource(User, '/user')
 api.add_resource(Category, '/category/<int:category_id>')
 api.add_resource(CategoryList, '/categories')
-api.add_resource(Anime, '/anime/<int:anime_id>')
+api.add_resource(Anime, '/anime/<int:anime_id>', '/anime')
 api.add_resource(AnimeList, '/animes')
 
 if __name__ == '__main__':
