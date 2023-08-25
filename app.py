@@ -109,7 +109,7 @@ class Anime(Resource):
 
         args = parser.parse_args()
 
-        for anime in data["animeList"]:
+        for anime in data["animeList"]: 
             if(id == anime["id"]):
                 for field in fields:
                     if args[field] is not None:
