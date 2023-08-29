@@ -228,7 +228,7 @@ cython_debug/
 # SageMath parsed files
 
 # Environments
-env/
+venv-pe/
 # Spyder project settings
 
 # Rope project settings
