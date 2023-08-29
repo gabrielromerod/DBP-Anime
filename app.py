@@ -6,14 +6,19 @@ from resources import Login, Register, Anime, Category
 from dotenv import load_dotenv
 import os
 
+# Cargar variables de entorno
+load_dotenv()
+
 app = Flask(__name__)
 
 # Configuraciones
-
-load_dotenv()
-
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'fallback_default_secret_key')
-app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql://{os.environ.get('DBUSER')}:{os.environ.get('DBPASS')}@{os.environ.get('DBHOST')}:{os.environ.get('DBPORT')}/{os.environ.get('DBNAME')}"
+
+# Configuración de la base de datos
+conn_str = os.environ.get('AZURE_POSTGRESQL_CONNECTIONSTRING')
+conn_str_params = {pair.split('=')[0]: pair.split('=')[1] for pair in conn_str.split(' ')}
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f"postgresql+psycopg2://{conn_str_params['user']}:{conn_str_params['password']}@{conn_str_params['host']}/{conn_str_params['dbname']}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializaciones
@@ -24,7 +29,7 @@ api = Api(app)
 @app.route('/')
 def index():
     return render_template('index.html')
-    
+
 api.add_resource(Login, '/login')
 api.add_resource(Register, '/register')
 api.add_resource(Anime, '/anime', '/anime/<int:id>')
