@@ -1,5 +1,5 @@
-# Created by https://www.toptal.com/developers/gitignore/api/virtualenv,python,visualstudiocode,flask
-# Edit at https://www.toptal.com/developers/gitignore?templates=virtualenv,python,visualstudiocode,flask
+# Created by https://www.toptal.com/developers/gitignore/api/visualstudiocode,flask,python,virtualenv
+# Edit at https://www.toptal.com/developers/gitignore?templates=visualstudiocode,flask,python,virtualenv
 
 ### Flask ###
 instance/*
@@ -228,7 +228,7 @@ cython_debug/
 # SageMath parsed files
 
 # Environments
-
+venv-pe/
 # Spyder project settings
 
 # Rope project settings
@@ -273,6 +273,7 @@ pip-selfcheck.json
 
 ### VisualStudioCode ###
 .vscode/*
+!.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
@@ -289,4 +290,4 @@ pip-selfcheck.json
 .history
 .ionide
 
-# End of https://www.toptal.com/developers/gitignore/api/virtualenv,python,visualstudiocode,flask
+# End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,flask,python,virtualenv
